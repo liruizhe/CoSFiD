@@ -1,0 +1,100 @@
+#!/bin/bash
+
+# == Get the path of this script ==
+MYPATH=$(readlink -f "$0")
+MYPATH=$(dirname "$MYPATH")
+# =================================
+
+build_cmd="$1"
+run_cmd="$2"
+cmp_cmd="$3"
+compiler="$4"
+option_a="$5"
+option_b="$6"
+output="$7"
+
+export COSFID_COMPILER="$compiler"
+export COSFID_COMPILE_LIST=$(mktemp)
+unset COSFID_REPLACE_OPTION
+
+# No $COSFID_FILE_LIST means it's first run
+if [ -z "$COSFID_FILE_LIST" ]; then
+    rm -f "$output"
+
+    # Build target program to get full source code list
+    full_filelist=$(mktemp)
+    export COSFID_COMPILE_RECORD="$full_filelist"
+    echo "- $option_a" > "$COSFID_COMPILE_LIST"
+    eval "$build_cmd"
+
+    # Run target program to get reference output 
+    export COSFID_REF_OUTPUT=$(mktemp)
+    eval "$run_cmd" > "$COSFID_REF_OUTPUT"
+
+    # Run CoSFiD again with $COSFID_FILE_LIST specified 
+    export COSFID_FILE_LIST="$full_filelist"
+    unset COSFID_COMPILE_RECORD
+    "$0" "$@"
+
+    # Do cleaning work
+    unlink "$COSFID_REF_OUTPUT"
+    unlink "$full_filelist"
+    unlink "$COSFID_COMPILE_LIST"
+    exit
+fi
+
+# Not first run
+
+# Get the number of source code files
+total=$(wc "$COSFID_FILE_LIST"|awk '{print $1}')
+if [ $total -le 1 ]; then
+    exit
+fi
+let half=total/2
+
+# Split source code files into two groups
+count=0
+first_half=$(mktemp)
+second_half=$(mktemp)
+while read hashkey data
+do
+    if [ $count -lt $half ]; then
+        echo "$hashkey $data" >> "$first_half"
+    else
+        echo "$hashkey $data" >> "$second_half"
+    fi
+    let count=count+1
+done < "$COSFID_FILE_LIST"
+
+# For each group
+for list in "$first_half" "$second_half"
+do
+    echo "- $option_a" > "$COSFID_COMPILE_LIST"
+    while read hashkey data
+    do
+        echo "$hashkey $option_b" >> "$COSFID_COMPILE_LIST"
+    done < "$list"
+
+    echo "==== Group ====" >> "$output"
+    cat "$list" >> "$output"
+    echo "--------" >> "$output"
+
+    eval "$build_cmd"
+
+    tmp_output=$(mktemp)
+    eval "$run_cmd" > "$tmp_output"
+
+    if eval "$cmp_cmd" "$COSFID_REF_OUTPUT" "$tmp_output"; then
+        echo "* Bitwise identical *" >> "$output"
+    else
+        echo "* Different *" >> "$output"
+    fi
+    echo "========" >> "$output"
+    echo "" >> "$output"
+    unlink "$tmp_output"
+
+    export COSFID_FILE_LIST="$list"
+    "$0" "$@"
+done
+unlink "$first_half"
+unlink "$second_half"

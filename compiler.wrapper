@@ -1,0 +1,135 @@
+#!/bin/bash
+
+trim()
+{
+    echo "$1" | grep -o "[^ ]\+\( \+[^ ]\+\)*"
+}
+
+error_exit()
+{
+    >&2 echo "Error: $1"
+    exit 1
+}
+
+export LC_ALL="POSIX"
+declare -A compilers_env
+declare -A compilers_path
+
+# ===== Get the path of this script =====
+MYPATH=$(readlink -f "$0")
+MYPATH=$(dirname "$MYPATH")
+# ======================================
+
+# ===== Get the command-lind name of this script =====
+MYEXEC=$(basename "$0")
+# ====================================================
+
+# ===== Load compiler configuration ======
+if [ ! -f "$MYPATH/compiler.cfg" ]; then
+    error_exit "compiler.cfg is not found, can't load the compiler configuration."
+fi
+
+exec 3<> "$MYPATH/compiler.cfg"
+while read line <& 3
+do
+    compiler_name=$(trim "$(echo "$line"|awk -F: '{print $1'})")
+    compiler_env=$(trim "$(echo "$line"|awk -F: '{print $2'})")
+    compiler_path=$(trim "$(echo "$line"|awk -F: '{print $3'})")
+    compilers_env["$compiler_name"]="$compiler_env"
+    compilers_path["$compiler_name"]="$compiler_path"
+done
+exec 3>&-
+
+if [ -z "$COSFID_COMPILER" ]; then
+    error_exit "COSFID_COMPILER is not set. We don't know which compiler is required."
+fi
+
+
+if [ ! "${compilers_path[$COSFID_COMPILER]+isset}" ]; then
+    error_exit "Can't find compiler setttings with name \"$COSFID_COMPILER\"."
+fi
+
+if [ ! -x "${compilers_path[$COSFID_COMPILER]}/$MYEXEC" ]; then
+    error_exit "Can't find executable compiler ${compilers_path[$COSFID_COMPILER]}/$MYEXEC. Please check your system or compiler.cfg."
+fi
+
+# ========================================
+
+# ===== Parse parameters =====
+BAK_PARAM="$@"
+is_final_link=0
+is_stdin_source_code=0
+source_files=()
+output_object=""
+
+while true; do
+    case "$1" in
+        -c) is_final_link=1; shift ;;
+        -o) output_object="$2"; shift 2 ;;
+        -) 
+        source_code=$(cat)
+        is_stdin_source_code=1
+        shift ;;
+        "") break ;;
+        *) 
+        if expr "$1" : "^[^-].*\.[Ff][0-9]*$" > /dev/null 
+        then 
+            source_files+=("$1")
+        elif expr "$1" : "^[^-].*\.[Cc][XxPp+]*$" > /dev/null 
+        then
+            source_files+=("$1")
+        fi
+        shift ;;
+    esac
+done
+# ============================
+
+
+# ===== Calculate the hash key =====
+if [ $is_stdin_source_code = 1 ]; then
+    hashkey=$(echo "$source_code"|md5sum|awk '{print $1}')
+elif [ ${#source_files[*]} -gt 0 ]; then
+    hashkey=$(echo ${source_files[*]}|md5sum|awk '{print $1}')
+fi
+# ==================================
+
+if [ ! -z "$COSFID_COMPILE_RECORD" ]; then
+    if [ $is_stdin_source_code = 1 ]; then
+        echo "$hashkey -" >> "$COSFID_COMPILE_RECORD"
+    elif [ ${#source_files[*]} -gt 0 ]; then
+        echo "$hashkey ${source_files[*]}" >> "$COSFID_COMPILE_RECORD"
+    fi
+fi
+
+if [ -f "$COSFID_COMPILE_LIST" ]; then
+    if [ -z "$COSFID_REPLACE_OPTION" ]; then
+        COSFID_REPLACE_OPTION="-DCoSFiD"
+    else
+        COSFID_REPLACE_OPTION=$(trim "$COSFID_REPLACE_OPTION")
+    fi
+    exec 3<> "$COSFID_COMPILE_LIST"
+    fallback_options=""
+    hashkey_found=0
+    while read key option <& 3
+    do
+        if [ "$key" = "$hashkey" ]; then
+            BAK_PARAM=$(echo $BAK_PARAM|sed "s#$COSFID_REPLACE_OPTION#$option#g")
+            hashkey_found=1
+            break
+        elif [ "$key" = "-" ]; then
+            fallback_options="$option"
+        fi
+    done
+    exec 3>&-
+    if [ "$hashkey_found" = "0" ]; then
+        BAK_PARAM=$(echo $BAK_PARAM|sed "s#$COSFID_REPLACE_OPTION#$fallback_options#g")
+    fi
+fi
+
+if [ ! -z "${compilers_env[$COSFID_COMPILER]}" ]; then
+    eval source ${compilers_env[$COSFID_COMPILER]}
+fi
+
+eval set -- $BAK_PARAM
+echo "[CoSFiD] ${compilers_path[$COSFID_COMPILER]}/$MYEXEC" "$@"
+eval "${compilers_path[$COSFID_COMPILER]}/$MYEXEC" "$@"

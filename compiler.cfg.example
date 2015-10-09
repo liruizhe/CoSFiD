@@ -1,0 +1,10 @@
+intel11 : : /opt/intel_old/Compiler/11.1/072/intel/bin/intel64
+intel12 : : /opt/intel/composer_xe_2011_sp1/bin
+intel13 : : /opt/intel/composer_xe_2013.0.079/bin/intel64
+intel14 : : /opt/intel/composer_xe_2013_sp1/bin
+intel15 : /opt/intel/composer_xe_2015/bin/compilervars.sh intel64 : /opt/intel/composer_xe_2015/bin
+gcc4.6.4 : : /opt/gcc/4.6.4/bin
+gcc4.7.4 : : /opt/gcc/4.7.4/bin
+gcc4.8.5 : : /opt/gcc/4.8.5/bin
+gcc4.9.3 : : /opt/gcc/4.9.3/bin
+gcc5.1.0 : : /opt/gcc/5.1.0/bin
