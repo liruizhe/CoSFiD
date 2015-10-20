@@ -84,17 +84,21 @@ do
     tmp_output=$(mktemp)
     eval "$run_cmd" > "$tmp_output"
 
+    need_go_into=0
     if eval "$cmp_cmd" "$COSFID_REF_OUTPUT" "$tmp_output"; then
         echo "* Bitwise identical *" >> "$output"
     else
         echo "* Different *" >> "$output"
+        need_go_into=1
     fi
     echo "========" >> "$output"
     echo "" >> "$output"
     unlink "$tmp_output"
 
-    export COSFID_FILE_LIST="$list"
-    "$0" "$@"
+    if [ "$need_go_into" = "1" ]; then
+        export COSFID_FILE_LIST="$list"
+        "$0" "$@"
+    fi
 done
 unlink "$first_half"
 unlink "$second_half"
