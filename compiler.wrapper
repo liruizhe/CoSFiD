@@ -29,28 +29,17 @@ if [ ! -f "$MYPATH/compiler.cfg" ]; then
     error_exit "compiler.cfg is not found, can't load the compiler configuration."
 fi
 
-exec 3<> "$MYPATH/compiler.cfg"
-while read line <& 3
-do
-    compiler_name=$(trim "$(echo "$line"|awk -F: '{print $1'})")
-    compiler_env=$(trim "$(echo "$line"|awk -F: '{print $2'})")
-    compiler_path=$(trim "$(echo "$line"|awk -F: '{print $3'})")
-    compilers_env["$compiler_name"]="$compiler_env"
-    compilers_path["$compiler_name"]="$compiler_path"
-done
-exec 3>&-
-
 if [ -z "$COSFID_COMPILER" ]; then
     error_exit "COSFID_COMPILER is not set. We don't know which compiler is required."
 fi
 
-
-if [ ! "${compilers_path[$COSFID_COMPILER]+isset}" ]; then
+if ! compiler_path=$("$MYPATH/utils/get_compiler_info" path "$COSFID_COMPILER"); then
     error_exit "Can't find compiler setttings with name \"$COSFID_COMPILER\"."
 fi
+compiler_env=$("$MYPATH/utils/get_compiler_info" env "$COSFID_COMPILER")
 
-if [ ! -x "${compilers_path[$COSFID_COMPILER]}/$MYEXEC" ]; then
-    error_exit "Can't find executable compiler ${compilers_path[$COSFID_COMPILER]}/$MYEXEC. Please check your system or compiler.cfg."
+if [ ! -x "$compiler_path/$MYEXEC" ]; then
+    error_exit "Can't find executable compiler $compiler_path/$MYEXEC. Please check your system or compiler.cfg."
 fi
 
 # ========================================
@@ -126,10 +115,10 @@ if [ -f "$COSFID_COMPILE_LIST" ]; then
     fi
 fi
 
-if [ ! -z "${compilers_env[$COSFID_COMPILER]}" ]; then
-    eval source ${compilers_env[$COSFID_COMPILER]}
+if [ ! -z "$compiler_env" ]; then
+    eval source $compiler_env
 fi
 
 eval set -- $BAK_PARAM
-echo "[CoSFiD] ${compilers_path[$COSFID_COMPILER]}/$MYEXEC" "$@"
-eval "${compilers_path[$COSFID_COMPILER]}/$MYEXEC" "$@"
+echo "[CoSFiD] $compiler_path/$MYEXEC" "$@"
+eval "$compiler_path/$MYEXEC" "$@"

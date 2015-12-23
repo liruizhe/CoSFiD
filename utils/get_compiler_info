@@ -1,0 +1,39 @@
+#!/bin/bash
+
+trim()
+{
+    echo "$1" | grep -o "[^ ]\+\( \+[^ ]\+\)*"
+}
+
+export LC_ALL="POSIX"
+# ===== Get the path of this script =====
+MYPATH=$(readlink -f "$0")
+MYPATH=$(dirname "$MYPATH")
+# ======================================
+
+operation="$1"
+compiler_id="$2"
+
+is_found=0
+exec 3<> "$MYPATH/../compiler.cfg"
+while read line <& 3
+do
+    compiler_name=$(trim "$(echo "$line"|awk -F: '{print $1'})")
+    if [ "$compiler_name" = "$compiler_id" ]; then
+        compiler_env=$(trim "$(echo "$line"|awk -F: '{print $2'})")
+        compiler_path=$(trim "$(echo "$line"|awk -F: '{print $3'})")
+        is_found=1
+        break
+    fi
+done
+exec 3>&-
+
+if [ $is_found -eq 0 ]; then
+    exit 1
+fi
+
+case "$operation" in
+    env) echo $compiler_env ;;
+    path) echo $compiler_path ;;
+    *) exit 1 ;;
+esac
