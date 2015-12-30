@@ -50,7 +50,7 @@ For examples, the *compilervars.sh* script of Intel Compiler. If such script is 
 This configuration file contains compiler options which need to change in the compiling progress.
 Each line of the configuration presents the compiler options for one source code file or one compiler command, as following form:
 
-    <hash key> : <compiler options>
+    <hash key> <compiler options>
 
 * The <***hash key***> is a hash key of the source code file or compiler command, which can be generated in recording mode.
 if <***hash_key***> is "-", the options will be considered as fallback options when the compiler wrapper cannot find a matched hash key in the file.
